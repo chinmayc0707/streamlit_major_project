@@ -5,6 +5,7 @@ import tempfile
 import re
 from urllib.parse import urlparse, parse_qs
 import requests
+from pytube import YouTube
 
 # Configure AssemblyAI API key
 aai.settings.api_key = st.session_state.get("ASSEMBLYAI_API_KEY", None)
@@ -49,15 +50,14 @@ def transcribe_audio(audio_file_path):
 def transcribe_youtube(youtube_url):
     """Transcribe YouTube video using AssemblyAI API"""
     try:
-        config = aai.TranscriptionConfig(speaker_labels=True)
-        transcriber = aai.Transcriber(config=config)
-        transcript = transcriber.transcribe(youtube_url)
+        yt = YouTube(youtube_url)
+        audio_stream = yt.streams.filter(only_audio=True).first()
         
-        if transcript.status == aai.TranscriptStatus.error:
-            st.error(f"YouTube transcription failed: {transcript.error}")
-            return None
-        else:
-            return transcript.text
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
+            audio_stream.stream_to_buffer(tmp_file)
+            tmp_file.seek(0)
+            return transcribe_audio(tmp_file.name)
+
     except Exception as e:
         st.error(f"YouTube transcription error: {str(e)}")
         return None
