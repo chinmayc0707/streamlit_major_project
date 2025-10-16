@@ -7,7 +7,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 
 # Configure AssemblyAI API key
-aai.settings.api_key ='dd8e7477bb284e2bbec8c879b74cd92a'
+aai.settings.api_key = st.session_state.get("ASSEMBLYAI_API_KEY", None)
 
 def is_youtube_url(url):
     """Check if the given string is a YouTube URL"""
@@ -84,117 +84,51 @@ def summarize_text(text):
         st.error(f"Summarization error: {str(e)}")
         return text
 
-def translate_to_kanglish(english_text):
-    """Translate English text to Kanglish (Kannada-English mix)"""
+import openai
+
+def translate_to_kanglish_with_llm(english_text):
+    """Translate English text to Kanglish using a Large Language Model."""
+    openrouter_api_key = st.session_state.get("OPENROUTER_API_KEY")
+    if not openrouter_api_key:
+        st.error("OpenRouter API key not found. Please set it in the Settings page.")
+        return "Translation failed: API key is missing."
+
     try:
-        # Enhanced keyword replacement dictionary
-        replacements = {
-            'artificial intelligence': 'krutrim buddhi',
-            'machine learning': 'yantra abhyasa',
-            'technology': 'tantrajnana',
-            'education': 'shikshana',
-            'student': 'vidyarthi',
-            'teacher': 'shikshaka',
-            'school': 'shale',
-            'university': 'vishwavidyalaya',
-            'computer': 'sanganaka',
-            'software': 'sadhana',
-            'application': 'yojane',
-            'system': 'vyavastha',
-            'data': 'ankana',
-            'information': 'mahiti',
-            'knowledge': 'jnana',
-            'global': 'vishwa',
-            'world': 'prapancha',
-            'country': 'desha',
-            'government': 'sarkara',
-            'development': 'abhivruddi',
-            'economic': 'arthika',
-            'business': 'vyapara',
-            'market': 'bazar',
-            'price': 'bele',
-            'money': 'duḍu',
-            'today': 'ivattu',
-            'tomorrow': 'naale',
-            'yesterday': 'ninne',
-            'now': 'ige',
-            'important': 'mukhya',
-            'necessary': 'avashyaka',
-            'good': 'chennagi',
-            'bad': 'ketta',
-            'big': 'dodda',
-            'small': 'chikka',
-            'new': 'hosa',
-            'old': 'haleya',
-            'beautiful': 'sundara',
-            'difficult': 'kathina',
-            'easy': 'sulagade',
-            'the': '',
-            'is': 'ide',
-            'are': 'ive',
-            'was': 'itu',
-            'were': 'ivaru',
-            'have': 'ive',
-            'has': 'ide',
-            'had': 'ittu',
-            'will': 'koodi',
-            'would': 'koodi',
-            'can': 'bahu',
-            'could': 'bahu',
-            'should': 'bēku',
-            'and': 'matte',
-            'but': 'aadare',
-            'because': 'ekendare',
-            'very': 'tumba',
-            'more': 'hechchu',
-            'most': 'atintha',
-            'many': 'anek',
-            'some': 'kelavu',
-            'few': 'salpa',
-            'all': 'ella',
-            'people': 'janaru',
-            'work': 'kelasa',
-            'time': 'samaya',
-            'year': 'varshada',
-            'day': 'dina',
-            'week': 'vaara',
-            'month': 'tingalu',
-            'first': 'modala',
-            'last': 'koneya',
-            'next': 'munde',
-            'previous': 'horage',
-            'current': 'jote'
-        }
+        client = openai.OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_api_key,
+        )
+
+        prompt = f"""
+        Translate the following English text into Kanglish. Kanglish is a mix of Kannada and English, where Kannada words are written in the English alphabet (transliterated). The goal is to make the text sound natural for a person from Karnataka, India, who speaks both languages.
+
+        Guidelines:
+        1.  Keep the sentence structure mostly English.
+        2.  Translate key nouns, verbs, and adjectives into Kannada, but keep conjunctions, prepositions, and technical terms in English.
+        3.  The final output must be easy to read and sound like a casual conversation.
+        4.  Do not provide any explanation, just the translated text.
+
+        English Text:
+        "{english_text}"
+
+        Kanglish Translation:
+        """
+
+        response = client.chat.completions.create(
+            model="deepseek/deepseek-coder",
+            messages=[
+                {"role": "system", "content": "You are an expert translator specializing in creating natural-sounding Kanglish."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+        )
         
-        kanglish_text = english_text.lower()
-        
-        # Replace phrases first (longer matches)
-        for eng_phrase, kan_word in replacements.items():
-            if eng_phrase in kanglish_text:
-                kanglish_text = kanglish_text.replace(eng_phrase, kan_word)
-        
-        # Replace single words
-        words = kanglish_text.split()
-        kanglish_words = []
-        
-        for word in words:
-            # Remove common English suffixes for better matching
-            base_word = word.rstrip('s.,!?')
-            if base_word in replacements:
-                kanglish_words.append(replacements[base_word])
-            else:
-                kanglish_words.append(word)
-        
-        kanglish_text = ' '.join(kanglish_words)
-        
-        # Capitalize first letter
-        kanglish_text = kanglish_text.capitalize()
-        
-        return kanglish_text
-        
+        return response.choices[0].message.content.strip()
+
     except Exception as e:
-        st.error(f"Translation error: {str(e)}")
-        return english_text
+        st.error(f"LLM Translation error: {str(e)}")
+        return "Translation failed due to an API error."
 
 def main():
     st.set_page_config(
@@ -352,7 +286,7 @@ def show_home_page():
             with st.spinner("Processing demo text..."):
                 st.session_state.transcription = demo_text
                 st.session_state.summary = summarize_text(demo_text)
-                st.session_state.kanglish_text = translate_to_kanglish(st.session_state.summary)
+                st.session_state.kanglish_text = translate_to_kanglish_with_llm(st.session_state.summary)
             
             st.success("Demo processed! Go to Processing Results to view.")
             st.rerun()
@@ -566,17 +500,25 @@ def show_settings_page():
     
     # API Configuration
     st.subheader("API Configuration")
-    api_key = st.text_input(
+
+    assemblyai_api_key = st.text_input(
         "AssemblyAI API Key:",
         type="password",
         placeholder="Enter your API key for audio processing",
-        value=aai.settings.api_key if aai.settings.api_key != "YOUR_ASSEMBLYAI_API_KEY_HERE" else ""
+        value=st.session_state.get("ASSEMBLYAI_API_KEY", "")
     )
-    
-    if api_key and api_key != aai.settings.api_key:
-        aai.settings.api_key = api_key
-        st.success("API key updated for this session")
-    
+    if assemblyai_api_key:
+        st.session_state["ASSEMBLYAI_API_KEY"] = assemblyai_api_key
+
+    openrouter_api_key = st.text_input(
+        "OpenRouter API Key:",
+        type="password",
+        placeholder="Enter your free key from OpenRouter for translation",
+        value=st.session_state.get("OPENROUTER_API_KEY", "")
+    )
+    if openrouter_api_key:
+        st.session_state["OPENROUTER_API_KEY"] = openrouter_api_key
+
     if st.button("Save Settings", type="primary"):
         st.session_state.settings = {
             'content_type': content_type,
@@ -640,7 +582,7 @@ def continue_processing():
     
     # Step 3: Kanglish Translation
     with st.status("Translating to Kanglish...", expanded=True) as status:
-        kanglish_text = translate_to_kanglish(st.session_state.summary)
+        kanglish_text = translate_to_kanglish_with_llm(st.session_state.summary)
         st.session_state.kanglish_text = kanglish_text
         status.update(label="Translation complete", state="complete")
     
